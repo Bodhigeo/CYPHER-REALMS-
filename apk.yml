@@ -1,4 +1,4 @@
-name: Construire APK
+name: github/workflows/apk.yml
 on:
   workflow_dispatch:
   push:
