@@ -1,0 +1,255 @@
+name: github/workflows/apk.yml
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Generer le projet Android
+        run: |
+          set -e
+          test -f index.html
+          test -f icon-192.png
+          mkdir -p android
+          cat > android/settings.gradle <<'EOF_0'
+          pluginManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+                  gradlePluginPortal()
+              }
+          }
+          dependencyResolutionManagement {
+              repositories {
+                  google()
+                  mavenCentral()
+              }
+          }
+          rootProject.name = "Cybercode"
+          include ':app'
+          EOF_0
+          mkdir -p android
+          cat > android/build.gradle <<'EOF_1'
+          plugins {
+              id 'com.android.application' version '8.5.2' apply false
+          }
+          EOF_1
+          mkdir -p android
+          cat > android/gradle.properties <<'EOF_2'
+          org.gradle.jvmargs=-Xmx2048m
+          android.useAndroidX=false
+          android.nonTransitiveRClass=true
+          EOF_2
+          mkdir -p android/app
+          cat > android/app/build.gradle <<'EOF_3'
+          plugins {
+              id 'com.android.application'
+          }
+
+          android {
+              namespace 'com.cybercode.game'
+              compileSdk 34
+
+              defaultConfig {
+                  applicationId 'com.cybercode.game'
+                  minSdk 24
+                  targetSdk 34
+                  versionCode Integer.parseInt(System.getenv('GITHUB_RUN_NUMBER') ?: '1')
+                  versionName '1.0'
+              }
+
+              signingConfigs {
+                  debug {
+                      storeFile file('../cybercode.p12')
+                      storePassword 'android'
+                      keyAlias 'cyber'
+                      keyPassword 'android'
+                  }
+              }
+
+              compileOptions {
+                  sourceCompatibility JavaVersion.VERSION_17
+                  targetCompatibility JavaVersion.VERSION_17
+              }
+          }
+          EOF_3
+          mkdir -p android/app/src/main
+          cat > android/app/src/main/AndroidManifest.xml <<'EOF_4'
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.VIBRATE" />
+              <application
+                  android:allowBackup="true"
+                  android:icon="@mipmap/ic_launcher"
+                  android:label="Cybercode"
+                  android:hardwareAccelerated="true"
+                  android:theme="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:screenOrientation="fullSensor"
+                      android:windowSoftInputMode="adjustResize"
+                      android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|uiMode|density|fontScale">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF_4
+          mkdir -p android/app/src/main/java/com/cybercode/game
+          cat > android/app/src/main/java/com/cybercode/game/MainActivity.java <<'EOF_5'
+          package com.cybercode.game;
+
+          import android.app.Activity;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.view.View;
+          import android.view.WindowManager;
+          import android.webkit.WebChromeClient;
+          import android.webkit.WebSettings;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+              private WebView web;
+
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                  if (Build.VERSION.SDK_INT >= 28) {
+                      WindowManager.LayoutParams lp = getWindow().getAttributes();
+                      lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+                      getWindow().setAttributes(lp);
+                  }
+                  web = new WebView(this);
+                  setContentView(web);
+                  WebSettings s = web.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setAllowFileAccess(true);
+                  s.setSupportZoom(false);
+                  s.setBuiltInZoomControls(false);
+                  s.setDisplayZoomControls(false);
+                  s.setMediaPlaybackRequiresUserGesture(false);
+                  web.setOverScrollMode(View.OVER_SCROLL_NEVER);
+                  web.setBackgroundColor(0xFF07070F);
+                  web.setOnLongClickListener(new View.OnLongClickListener() {
+                      @Override
+                      public boolean onLongClick(View v) {
+                          return true;
+                      }
+                  });
+                  web.setWebViewClient(new WebViewClient());
+                  web.setWebChromeClient(new WebChromeClient());
+                  web.loadUrl("file:///android_asset/index.html");
+              }
+
+              private void immersive() {
+                  getWindow().getDecorView().setSystemUiVisibility(
+                      View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                      | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                      | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                      | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                      | View.SYSTEM_UI_FLAG_FULLSCREEN
+                      | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
+              }
+
+              @Override
+              public void onWindowFocusChanged(boolean hasFocus) {
+                  super.onWindowFocusChanged(hasFocus);
+                  if (hasFocus) {
+                      immersive();
+                  }
+              }
+
+              @Override
+              protected void onPause() {
+                  super.onPause();
+                  web.onPause();
+              }
+
+              @Override
+              protected void onResume() {
+                  super.onResume();
+                  web.onResume();
+                  immersive();
+              }
+
+              @Override
+              public void onBackPressed() {
+                  moveTaskToBack(true);
+              }
+          }
+          EOF_5
+          mkdir -p android/app/src/main/assets
+          cp index.html android/app/src/main/assets/index.html
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do mkdir -p android/app/src/main/res/mipmap-$d; cp icon-192.png android/app/src/main/res/mipmap-$d/ic_launcher.png; done
+          base64 -d > android/cybercode.p12 <<'EOF_KS'
+          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
+          EOF_KS
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+      - name: Compiler
+        run: gradle -p android assembleDebug --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cybercode-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
